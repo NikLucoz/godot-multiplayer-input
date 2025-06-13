@@ -48,6 +48,12 @@ func reset():
 	# also clean up when gamepads disconnect
 	if !Input.joy_connection_changed.is_connected(_on_joy_connection_changed):
 		Input.joy_connection_changed.connect(_on_joy_connection_changed)
+	
+	# create actions for all currently connected joypads
+	# when we first reset the InputMap we need to create actions for all currently connected joypads
+	# or sometimes the InputMap will not have any actions for them if they were connected before the game started
+	for id in Input.get_connected_joypads():
+		_on_joy_connection_changed(id, true)
 
 func _on_joy_connection_changed(device: int, connected: bool):
 	if connected:
@@ -55,9 +61,20 @@ func _on_joy_connection_changed(device: int, connected: bool):
 	else:
 		_delete_actions_for_device(device)
 
+func has_actions_for_device(device: int) -> bool:
+	# We only ever create an entry in device_actions when
+	# we run _create_actions_for_device, so presence in the dict
+	# is enough to know it’s been initialized.
+	return device_actions.has(device)
+
 func _create_actions_for_device(device: int):
 	# skip action creation if the device should be ignored
 	if Input.get_joy_guid(device) in ignored_guids:
+		return
+
+	# if the device already has actions, don't create them again
+	# this is needed because we already created actions for the devices connected from the start
+	if has_actions_for_device(device):
 		return
 
 	device_actions[device] = {}
