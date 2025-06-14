@@ -26,6 +26,12 @@ var device_actions = {}
 ## Array of GUIDs - If a device with an ignored GUID is detected, no input actions will be added.
 var ignored_guids = []
 
+## These signals are triggered when a device is connected, reconnected, or disconnected.
+## Nodes that use this Singleton should connect to these signals
+## and properly handle device disconnection to prevent get_action_name assertions from being triggered.
+signal device_connected(device: int)
+signal device_disconnected(device: int)
+
 func _init():
 	reset()
 
@@ -48,17 +54,15 @@ func reset():
 	# also clean up when gamepads disconnect
 	if !Input.joy_connection_changed.is_connected(_on_joy_connection_changed):
 		Input.joy_connection_changed.connect(_on_joy_connection_changed)
-	
-	# create actions for all currently connected joypads
-	# when we first reset the InputMap we need to create actions for all currently connected joypads
-	# or sometimes the InputMap will not have any actions for them if they were connected before the game started
-	for id in Input.get_connected_joypads():
-		_on_joy_connection_changed(id, true)
 
 func _on_joy_connection_changed(device: int, connected: bool):
+	print(Input.get_connected_joypads())
+	
 	if connected:
+		device_connected.emit(device)
 		_create_actions_for_device(device)
 	else:
+		device_disconnected.emit(device)
 		_delete_actions_for_device(device)
 
 func has_actions_for_device(device: int) -> bool:
@@ -71,12 +75,10 @@ func _create_actions_for_device(device: int):
 	# skip action creation if the device should be ignored
 	if Input.get_joy_guid(device) in ignored_guids:
 		return
-
-	# if the device already has actions, don't create them again
-	# this is needed because we already created actions for the devices connected from the start
+	
 	if has_actions_for_device(device):
 		return
-
+	
 	device_actions[device] = {}
 	for core_action in core_actions:
 		var new_action = "%s%s" % [device, core_action]
@@ -119,8 +121,6 @@ func _delete_actions_for_device(device: int):
 	# not sure if this is necessary but whatever, this is safe
 	for action in actions_to_erase:
 		InputMap.erase_action(action)
-
-
 
 # use these functions to query the action states just like normal Input functions
 
